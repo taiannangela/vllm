@@ -1,15 +1,19 @@
 """Bookshelf Exchange - a small book sharing site for a friends group.
 
-Members photograph their bookshelves, catalog the books on them, search
-each other's collections, and borrow/return books through the site.
+Members photograph their bookshelves, Claude reads the book spines from the
+photo to build the catalog, and friends search each other's collections and
+borrow/return books through the site.
 """
 
+import base64
+import json
 import os
 import sqlite3
 import uuid
 from datetime import datetime
 from functools import wraps
 
+import anthropic
 from flask import (
     Flask,
     abort,
@@ -22,13 +26,15 @@ from flask import (
     session,
     url_for,
 )
+from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, "bookshelf.db")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+SCAN_MODEL = os.environ.get("BOOK_SCAN_MODEL", "claude-opus-4-8")
+MAX_PHOTO_EDGE = 2000  # px; plenty for Claude to read spines, keeps files small
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24).hex())
@@ -210,10 +216,136 @@ def logout():
 # --------------------------------------------------------------------------
 
 
-def allowed_photo(filename):
-    return "." in filename and (
-        filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-    )
+def save_photo(file_storage):
+    """Validate, normalize, and save an uploaded shelf photo as JPEG.
+
+    Returns the stored filename, or None if the upload isn't an image.
+    """
+    try:
+        img = Image.open(file_storage.stream)
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("RGB")
+    except (UnidentifiedImageError, OSError, ValueError):
+        return None
+    img.thumbnail((MAX_PHOTO_EDGE, MAX_PHOTO_EDGE))
+    name = f"{uuid.uuid4().hex}.jpg"
+    img.save(os.path.join(UPLOAD_DIR, name), "JPEG", quality=85)
+    return name
+
+
+BOOKS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "books": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "author": {"type": "string"},
+                },
+                "required": ["title", "author"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["books"],
+    "additionalProperties": False,
+}
+
+SCAN_PROMPT = (
+    "This is a photo of a bookshelf. Identify every book whose spine or"
+    " cover is legible. For each, give the title and author exactly as"
+    " printed (use your knowledge of the book to fill in an author that is"
+    " printed too small to read; leave author empty only if truly unknown)."
+    " List each physical book once, in shelf order. Skip objects that are"
+    " not books and spines too blurry or obscured to identify."
+)
+
+
+class ScanError(Exception):
+    pass
+
+
+def scan_shelf_photo(photo_name):
+    """Read book titles/authors from a shelf photo via the Claude vision API.
+
+    Returns a list of {"title": ..., "author": ...} dicts.
+    Raises ScanError with a user-friendly message on failure.
+    """
+    try:
+        client = anthropic.Anthropic()
+    except Exception as exc:
+        raise ScanError(
+            "AI scanning isn't configured (set ANTHROPIC_API_KEY on the"
+            " server). You can still add books by hand below."
+        ) from exc
+    with open(os.path.join(UPLOAD_DIR, photo_name), "rb") as f:
+        image_data = base64.standard_b64encode(f.read()).decode("utf-8")
+    try:
+        response = client.messages.create(
+            model=SCAN_MODEL,
+            max_tokens=16000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_data,
+                            },
+                        },
+                        {"type": "text", "text": SCAN_PROMPT},
+                    ],
+                }
+            ],
+            output_config={
+                "format": {"type": "json_schema", "schema": BOOKS_SCHEMA}
+            },
+        )
+    except (TypeError, anthropic.AuthenticationError) as exc:
+        # The SDK raises TypeError at request time when no credentials
+        # resolve; AuthenticationError when the key is invalid.
+        raise ScanError(
+            "AI scanning isn't configured — set a valid ANTHROPIC_API_KEY on"
+            " the server. You can still add books by hand below."
+        ) from exc
+    except anthropic.APIError as exc:
+        raise ScanError(
+            "The AI scan didn't go through — try 'Scan photo' again in a"
+            " minute, or add books by hand below."
+        ) from exc
+    if response.stop_reason == "refusal":
+        raise ScanError("The AI couldn't process this photo — add books by hand below.")
+    text = next(b.text for b in response.content if b.type == "text")
+    return json.loads(text)["books"]
+
+
+def add_scanned_books(db, shelf_id, owner_id, found):
+    """Insert scanned books, skipping titles already on the shelf."""
+    existing = {
+        row["title"].strip().lower()
+        for row in db.execute(
+            "SELECT title FROM books WHERE shelf_id = ?", (shelf_id,)
+        )
+    }
+    added = 0
+    for book in found:
+        title = book["title"].strip()
+        if not title or title.lower() in existing:
+            continue
+        existing.add(title.lower())
+        db.execute(
+            "INSERT INTO books (owner_id, shelf_id, title, author, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (owner_id, shelf_id, title, book["author"].strip(), now()),
+        )
+        added += 1
+    db.commit()
+    return added
 
 
 @app.route("/")
@@ -247,12 +379,10 @@ def new_shelf():
         photo_name = None
         photo = request.files.get("photo")
         if photo and photo.filename:
-            if not allowed_photo(photo.filename):
-                flash("Photo must be a png, jpg, gif, or webp image.")
+            photo_name = save_photo(photo)
+            if photo_name is None:
+                flash("That file doesn't look like an image — try a photo.")
                 return render_template("new_shelf.html")
-            ext = photo.filename.rsplit(".", 1)[1].lower()
-            photo_name = f"{uuid.uuid4().hex}.{secure_filename(ext)}"
-            photo.save(os.path.join(UPLOAD_DIR, photo_name))
         db = get_db()
         cur = db.execute(
             "INSERT INTO shelves (user_id, name, photo, created_at)"
@@ -260,9 +390,48 @@ def new_shelf():
             (session["user_id"], name, photo_name, now()),
         )
         db.commit()
-        flash("Shelf saved! Now list the books you can spot in the photo.")
-        return redirect(url_for("shelf", shelf_id=cur.lastrowid))
+        shelf_id = cur.lastrowid
+        if photo_name:
+            try:
+                found = scan_shelf_photo(photo_name)
+                added = add_scanned_books(
+                    db, shelf_id, session["user_id"], found
+                )
+                flash(
+                    f"Shelf saved! The AI spotted {added} book"
+                    f"{'' if added == 1 else 's'} in your photo — check the"
+                    " list and fix anything it misread."
+                )
+            except ScanError as exc:
+                flash(f"Shelf saved! {exc}")
+        else:
+            flash("Shelf saved! Add books below.")
+        return redirect(url_for("shelf", shelf_id=shelf_id))
     return render_template("new_shelf.html")
+
+
+@app.route("/shelves/<int:shelf_id>/scan", methods=["POST"])
+@login_required
+def rescan_shelf(shelf_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM shelves WHERE id = ?", (shelf_id,)).fetchone()
+    if row is None:
+        abort(404)
+    if row["user_id"] != session["user_id"]:
+        abort(403)
+    if not row["photo"]:
+        flash("This shelf has no photo to scan.")
+    else:
+        try:
+            found = scan_shelf_photo(row["photo"])
+            added = add_scanned_books(db, shelf_id, session["user_id"], found)
+            if added:
+                flash(f"Scan found {added} new book{'' if added == 1 else 's'}.")
+            else:
+                flash("Scan finished — no new books beyond what's listed.")
+        except ScanError as exc:
+            flash(str(exc))
+    return redirect(url_for("shelf", shelf_id=shelf_id))
 
 
 @app.route("/shelves/<int:shelf_id>")

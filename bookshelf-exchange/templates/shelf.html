@@ -42,13 +42,20 @@
     {% endif %}
 
     {% if me and me['id'] == shelf['user_id'] %}
-    <h3>Add books from the photo</h3>
-    <p class="muted">One book per line. Add the author after a
-      <code>|</code>, like: <code>The Hobbit | J.R.R. Tolkien</code></p>
+    {% if shelf['photo'] %}
+    <form action="{{ url_for('rescan_shelf', shelf_id=shelf['id']) }}" method="post">
+      <button type="submit" class="cta">✨ Scan photo for books</button>
+      <span class="muted">The AI reads the spines and adds what it finds.</span>
+    </form>
+    {% endif %}
+    <h3>Add books by hand</h3>
+    <p class="muted">For spines the AI couldn't read — one book per line,
+      author after a <code>|</code>, like:
+      <code>The Hobbit | J.R.R. Tolkien</code></p>
     <form action="{{ url_for('add_books', shelf_id=shelf['id']) }}" method="post">
-      <textarea name="books" rows="6" required
+      <textarea name="books" rows="4" required
                 placeholder="The Hobbit | J.R.R. Tolkien&#10;Pride and Prejudice | Jane Austen"></textarea>
-      <button type="submit" class="cta">Add books</button>
+      <button type="submit">Add books</button>
     </form>
     {% endif %}
   </div>

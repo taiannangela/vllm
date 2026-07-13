@@ -8,8 +8,9 @@ books from each other.
 - **Accounts** — each friend creates their own account.
 - **Shelf photos** — take a picture of a bookshelf, upload it, and it's
   saved to your account for everyone in the group to browse.
-- **Catalog** — while looking at the photo, list the books on the shelf
-  (one per line, with an optional `Title | Author` format).
+- **AI catalog** — when a photo is uploaded, Claude reads the book spines
+  and fills in the title/author list automatically. A "Scan photo" button
+  re-runs it, and a manual form covers any spines it couldn't read.
 - **Search** — search by title or author across *everyone's* shelves and
   see whose library has the book and whether it's available.
 - **Borrow / check out / return** — click **Borrow** on any available
@@ -31,6 +32,20 @@ python app.py
 
 Then open <http://localhost:5000> in a browser. The first person to visit
 just clicks **Join** to create an account.
+
+### Enabling AI photo scanning
+
+The book-spine reading uses the Claude API. Get an API key from
+<https://platform.claude.com>, then start the server with it set:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python app.py
+```
+
+Without a key everything else still works — the site just tells you to add
+books by hand. Each shelf-photo scan costs roughly a cent or two
+(model: `claude-opus-4-8`; override with the `BOOK_SCAN_MODEL` env var).
 
 Data is stored in a local SQLite file (`bookshelf.db`) and uploaded photos
 go in `uploads/`, so backing up the site is just copying those two things.
