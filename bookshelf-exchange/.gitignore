@@ -1,4 +1,5 @@
 bookshelf.db
+.env
 uploads/*
 !uploads/.gitkeep
 .venv/

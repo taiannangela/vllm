@@ -20,32 +20,35 @@ books from each other.
 
 ## Running it
 
-Requires Python 3.10+ and Flask.
+Requires Python 3.10+. The start script handles everything else:
 
 ```bash
 cd bookshelf-exchange
-python -m venv .venv
-source .venv/bin/activate        # on Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
+./run.sh          # on Windows: double-click run.bat
 ```
 
-Then open <http://localhost:5000> in a browser. The first person to visit
-just clicks **Join** to create an account.
+The first run sets up the environment and asks for your Claude API key
+(get one at <https://platform.claude.com> — it powers the AI book-spine
+reading and is saved to a local `.env` file so you're only asked once).
+Then open <http://localhost:5000> in a browser and click **Join** to
+create an account.
 
-### Enabling AI photo scanning
+Without a key everything still works except AI scanning — the site tells
+you to add books by hand. Each shelf-photo scan costs roughly a cent or
+two (model: `claude-opus-4-8`; override with the `BOOK_SCAN_MODEL` env
+var).
 
-The book-spine reading uses the Claude API. Get an API key from
-<https://platform.claude.com>, then start the server with it set:
+<details><summary>Manual setup (if you prefer not to use the script)</summary>
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate        # on Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 python app.py
 ```
 
-Without a key everything else still works — the site just tells you to add
-books by hand. Each shelf-photo scan costs roughly a cent or two
-(model: `claude-opus-4-8`; override with the `BOOK_SCAN_MODEL` env var).
+</details>
 
 Data is stored in a local SQLite file (`bookshelf.db`) and uploaded photos
 go in `uploads/`, so backing up the site is just copying those two things.

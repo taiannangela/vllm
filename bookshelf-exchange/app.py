@@ -33,6 +33,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, "bookshelf.db")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
+# Load settings (e.g. ANTHROPIC_API_KEY) saved by run.sh/run.bat into a .env
+# file next to this script. Real environment variables take precedence.
+_env_file = os.path.join(BASE_DIR, ".env")
+if os.path.exists(_env_file):
+    with open(_env_file) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 SCAN_MODEL = os.environ.get("BOOK_SCAN_MODEL", "claude-opus-4-8")
 MAX_PHOTO_EDGE = 2000  # px; plenty for Claude to read spines, keeps files small
 
