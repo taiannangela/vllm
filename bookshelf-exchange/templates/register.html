@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Join · Bookshelf Exchange{% endblock %}
+{% block content %}
+<div class="form-page">
+  <h1>Join the exchange</h1>
+  <form method="post">
+    <label>Username <input name="username" required maxlength="30"
+           pattern="[A-Za-z0-9]+" title="Letters and numbers only"></label>
+    <label>Display name <input name="display_name" maxlength="50"
+           placeholder="What your friends call you"></label>
+    <label>Password <input name="password" type="password" required minlength="6"></label>
+    <button type="submit" class="cta">Create account</button>
+  </form>
+  <p class="muted">Already a member? <a href="{{ url_for('login') }}">Log in</a></p>
+</div>
+{% endblock %}

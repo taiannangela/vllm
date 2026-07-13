@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ shelf['name'] }} · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>{{ shelf['name'] }}</h1>
+<p class="muted">A shelf from
+  <a href="{{ url_for('user_page', username=shelf['username']) }}">{{ shelf['display_name'] }}</a>
+</p>
+
+<div class="shelf-layout">
+  <div class="shelf-photo">
+    {% if shelf['photo'] %}
+      <img src="{{ url_for('uploaded_file', filename=shelf['photo']) }}" alt="{{ shelf['name'] }}">
+    {% else %}
+      <div class="no-photo big">📚 No photo</div>
+    {% endif %}
+  </div>
+
+  <div class="shelf-books">
+    <h2>Books on this shelf</h2>
+    {% if books %}
+    <ul class="book-list">
+      {% for b in books %}
+      <li>
+        <span class="title">{{ b['title'] }}</span>
+        {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}
+        <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
+        {% if me and me['id'] != shelf['user_id'] and b['status'] == 'available' %}
+        <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
+          <button type="submit">Borrow</button>
+        </form>
+        {% endif %}
+        {% if me and me['id'] == shelf['user_id'] %}
+        <form class="inline" action="{{ url_for('delete_book', book_id=b['id']) }}" method="post">
+          <button type="submit" class="danger" title="Remove book">✕</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No books listed yet.</p>
+    {% endif %}
+
+    {% if me and me['id'] == shelf['user_id'] %}
+    <h3>Add books from the photo</h3>
+    <p class="muted">One book per line. Add the author after a
+      <code>|</code>, like: <code>The Hobbit | J.R.R. Tolkien</code></p>
+    <form action="{{ url_for('add_books', shelf_id=shelf['id']) }}" method="post">
+      <textarea name="books" rows="6" required
+                placeholder="The Hobbit | J.R.R. Tolkien&#10;Pride and Prejudice | Jane Austen"></textarea>
+      <button type="submit" class="cta">Add books</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Add a shelf · Bookshelf Exchange{% endblock %}
+{% block content %}
+<div class="form-page">
+  <h1>Add a bookshelf</h1>
+  <p class="muted">Take a picture of your bookshelf and upload it here.
+     On the next page you'll list the books you can spot in the photo.</p>
+  <form method="post" enctype="multipart/form-data">
+    <label>Shelf name
+      <input name="name" maxlength="60" placeholder="e.g. Bedroom shelf, top row">
+    </label>
+    <label>Photo of the shelf
+      <input name="photo" type="file" accept="image/*">
+    </label>
+    <button type="submit" class="cta">Save shelf</button>
+  </form>
+</div>
+{% endblock %}

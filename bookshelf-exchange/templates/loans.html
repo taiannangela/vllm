@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}My borrowing · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>My borrowing</h1>
+{% if loans %}
+<ul class="loan-list">
+  {% for l in loans %}
+  <li>
+    <span class="title">{{ l['title'] }}</span>
+    {% if l['author'] %}<span class="author">by {{ l['author'] }}</span>{% endif %}
+    <span>from
+      <a href="{{ url_for('user_page', username=l['username']) }}">{{ l['display_name'] }}</a>
+    </span>
+    <span class="status {{ l['status'] }}">
+      {% if l['status'] == 'requested' %}waiting for approval
+      {% elif l['status'] == 'checked_out' %}checked out since {{ l['checked_out_at'][:10] }}
+      {% elif l['status'] == 'returned' %}returned {{ l['returned_at'][:10] }}
+      {% else %}{{ l['status'] }}{% endif %}
+    </span>
+    {% if l['status'] == 'requested' %}
+    <form class="inline" action="{{ url_for('cancel_request', loan_id=l['id']) }}" method="post">
+      <button type="submit">Cancel</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">You haven't borrowed anything yet.
+  <a href="{{ url_for('search') }}">Search for a book</a> to get started.</p>
+{% endif %}
+{% endblock %}

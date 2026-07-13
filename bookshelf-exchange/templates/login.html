@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Log in · Bookshelf Exchange{% endblock %}
+{% block content %}
+<div class="form-page">
+  <h1>Welcome back</h1>
+  <form method="post">
+    <label>Username <input name="username" required></label>
+    <label>Password <input name="password" type="password" required></label>
+    <button type="submit" class="cta">Log in</button>
+  </form>
+  <p class="muted">New here? <a href="{{ url_for('register') }}">Create an account</a></p>
+</div>
+{% endblock %}

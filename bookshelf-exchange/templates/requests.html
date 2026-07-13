@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Requests · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>Lending desk</h1>
+
+<section>
+  <h2>Requests for your books</h2>
+  {% if incoming %}
+  <ul class="loan-list">
+    {% for l in incoming %}
+    <li>
+      <span class="title">{{ l['title'] }}</span>
+      {% if l['author'] %}<span class="author">by {{ l['author'] }}</span>{% endif %}
+      <span>requested by
+        <a href="{{ url_for('user_page', username=l['username']) }}">{{ l['display_name'] }}</a>
+      </span>
+      <form class="inline" action="{{ url_for('approve_loan', loan_id=l['id']) }}" method="post">
+        <button type="submit" class="cta">Approve checkout</button>
+      </form>
+      <form class="inline" action="{{ url_for('decline_loan', loan_id=l['id']) }}" method="post">
+        <button type="submit">Decline</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No pending requests.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Currently lent out</h2>
+  {% if lent_out %}
+  <ul class="loan-list">
+    {% for l in lent_out %}
+    <li>
+      <span class="title">{{ l['title'] }}</span>
+      {% if l['author'] %}<span class="author">by {{ l['author'] }}</span>{% endif %}
+      <span>with
+        <a href="{{ url_for('user_page', username=l['username']) }}">{{ l['display_name'] }}</a>
+        since {{ l['checked_out_at'][:10] }}
+      </span>
+      <form class="inline" action="{{ url_for('return_loan', loan_id=l['id']) }}" method="post">
+        <button type="submit" class="cta">Mark returned</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing is lent out right now.</p>
+  {% endif %}
+</section>
+{% endblock %}
