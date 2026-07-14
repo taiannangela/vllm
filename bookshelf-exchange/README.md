@@ -60,9 +60,28 @@ flask --app app run --host 0.0.0.0
 ```
 
 and give them your computer's local IP address (e.g. `http://192.168.1.20:5000`).
-For hosting on the internet, deploy it to any small host that runs Python
-(PythonAnywhere, Render, Fly.io, a Raspberry Pi, ...) and set a `SECRET_KEY`
-environment variable so logins survive server restarts.
+
+## Hosting it on the internet (no computer needed)
+
+So the whole friends group can use the site from their phones, deploy it
+to [Render](https://render.com) — entirely from a browser:
+
+1. Sign up at render.com with your GitHub account.
+2. Tap **New +** → **Blueprint**, and pick this repository and branch.
+   Render reads `render.yaml` (at the repo root) and configures everything.
+3. When prompted, paste your `ANTHROPIC_API_KEY`.
+4. Deploy. You get a public URL like `https://bookshelf-exchange.onrender.com`
+   to share with the group.
+
+The config uses Render's Starter plan with a 1 GB persistent disk
+(~$8/month) so accounts, books, and photos survive restarts and redeploys.
+A free-tier web service also works for a quick trial (delete the `disk`
+and `plan` lines from `render.yaml`), but its storage is wiped every time
+the service restarts, so don't let the group invest in cataloging there.
+
+Any other Python host (PythonAnywhere, Fly.io, Railway, a Raspberry Pi)
+works too: run `gunicorn app:app`, point `DATA_DIR` at persistent storage,
+and set `ANTHROPIC_API_KEY`.
 
 ## Ideas for later
 

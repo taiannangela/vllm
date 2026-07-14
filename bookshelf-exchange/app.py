@@ -30,8 +30,6 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, "bookshelf.db")
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
 # Load settings (e.g. ANTHROPIC_API_KEY) saved by run.sh/run.bat into a .env
 # file next to this script. Real environment variables take precedence.
@@ -44,11 +42,34 @@ if os.path.exists(_env_file):
                 _k, _, _v = _line.partition("=")
                 os.environ.setdefault(_k.strip(), _v.strip())
 
+# All persistent data (database, photos, session secret) lives in DATA_DIR.
+# Cloud hosts point this at their persistent disk; locally it's this folder.
+DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
+DATABASE = os.path.join(DATA_DIR, "bookshelf.db")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+
+
+def _secret_key():
+    """Session-signing key that survives restarts (else logins drop)."""
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    path = os.path.join(DATA_DIR, "secret_key")
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        key = os.urandom(24).hex()
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(key)
+        return key
+
 SCAN_MODEL = os.environ.get("BOOK_SCAN_MODEL", "claude-opus-4-8")
 MAX_PHOTO_EDGE = 2000  # px; plenty for Claude to read spines, keeps files small
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24).hex())
+app.config["SECRET_KEY"] = _secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB photo uploads
 
 SCHEMA = """
