@@ -9,9 +9,8 @@ trap 'rm -rf "$TMP"' EXIT
 echo "Downloading the latest version..."
 curl -fsSL -o "$TMP/update.zip" \
   "https://codeload.github.com/taiannangela/vllm/zip/refs/heads/claude/book-sharing-exchange-site-tkbgn3"
+# The zip never contains your data files (.env, bookshelf.db, uploads,
+# .venv are not in the repository), so copying over is safe.
 unzip -q "$TMP/update.zip" -d "$TMP"
-rsync -a \
-  --exclude .env --exclude bookshelf.db --exclude secret_key \
-  --exclude uploads --exclude .venv \
-  "$TMP"/*/bookshelf-exchange/ .
+cp -R "$TMP"/*/bookshelf-exchange/. .
 echo "Update complete! Start the site with ./run.sh as usual."
