@@ -12,9 +12,9 @@
       {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}
       <a class="owner" href="{{ url_for('user_page', username=b['username']) }}">{{ b['display_name'] }}</a>
       <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
-      {% if me and me['id'] != b['owner_id'] and b['status'] == 'available' %}
+      {% if me and me['id'] != b['owner_id'] %}
       <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
-        <button type="submit">Borrow</button>
+        <button type="submit">{{ 'Borrow' if b['status'] == 'available' else 'Place hold' }}</button>
       </form>
       {% endif %}
     </li>

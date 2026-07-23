@@ -180,11 +180,14 @@ def inject_globals():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    join_code = os.environ.get("JOIN_CODE", "").strip()
     if request.method == "POST":
         username = request.form["username"].strip()
         display_name = request.form["display_name"].strip() or username
         password = request.form["password"]
-        if not username or not username.isalnum():
+        if join_code and request.form.get("join_code", "").strip() != join_code:
+            flash("That group code isn't right — ask whoever runs the site.")
+        elif not username or not username.isalnum():
             flash("Username must be letters and numbers only.")
         elif len(password) < 6:
             flash("Password must be at least 6 characters.")
@@ -211,7 +214,7 @@ def register():
                 session["user_id"] = user["id"]
                 flash("Welcome! Add your first shelf to get started.")
                 return redirect(url_for("new_shelf"))
-    return render_template("register.html")
+    return render_template("register.html", need_code=bool(join_code))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -705,14 +708,12 @@ def request_book(book_id):
         abort(404)
     if book["owner_id"] == session["user_id"]:
         flash("That's your own book!")
-    elif book["status"] != "available":
-        flash("That book is already checked out.")
     elif db.execute(
         """SELECT 1 FROM loans WHERE book_id = ? AND borrower_id = ?
            AND status IN ('requested', 'checked_out')""",
         (book_id, session["user_id"]),
     ).fetchone():
-        flash("You already have a request or loan for that book.")
+        flash("You already have a request or hold on that book.")
     else:
         db.execute(
             "INSERT INTO loans (book_id, borrower_id, status, requested_at)"
@@ -720,7 +721,18 @@ def request_book(book_id):
             (book_id, session["user_id"], now()),
         )
         db.commit()
-        flash("Request sent! The owner will approve the checkout.")
+        if book["status"] == "available":
+            flash("Request sent! The owner will approve the checkout.")
+        else:
+            queue = db.execute(
+                "SELECT COUNT(*) FROM loans WHERE book_id = ?"
+                " AND status = 'requested'",
+                (book_id,),
+            ).fetchone()[0]
+            flash(
+                f"Hold placed — you're #{queue} in line. The owner will"
+                " approve it once the book comes back."
+            )
     return redirect(request.referrer or url_for("index"))
 
 
@@ -730,6 +742,7 @@ def requests_page():
     db = get_db()
     incoming = db.execute(
         """SELECT loans.*, books.title, books.author,
+                  books.status AS book_status,
                   users.username, users.display_name
            FROM loans
            JOIN books ON books.id = loans.book_id
@@ -756,7 +769,8 @@ def _loan_for_owner(loan_id):
     loan = (
         get_db()
         .execute(
-            """SELECT loans.*, books.owner_id FROM loans
+            """SELECT loans.*, books.owner_id, books.status AS book_status
+               FROM loans
                JOIN books ON books.id = loans.book_id
                WHERE loans.id = ?""",
             (loan_id,),
@@ -777,6 +791,11 @@ def approve_loan(loan_id):
     loan = _loan_for_owner(loan_id)
     if loan["status"] != "requested":
         flash("That request is no longer pending.")
+    elif loan["book_status"] != "available":
+        flash(
+            "That book is still checked out — mark it returned first, then"
+            " approve the hold."
+        )
     else:
         db.execute(
             "UPDATE loans SET status = 'checked_out', checked_out_at = ?"
@@ -786,11 +805,6 @@ def approve_loan(loan_id):
         db.execute(
             "UPDATE books SET status = 'borrowed' WHERE id = ?",
             (loan["book_id"],),
-        )
-        db.execute(
-            """UPDATE loans SET status = 'declined'
-               WHERE book_id = ? AND status = 'requested' AND id != ?""",
-            (loan["book_id"], loan_id),
         )
         db.commit()
         flash("Checked out. Mark it returned when you get it back.")
@@ -828,7 +842,20 @@ def return_loan(loan_id):
             (loan["book_id"],),
         )
         db.commit()
-        flash("Welcome back, book! It's available again.")
+        next_hold = db.execute(
+            """SELECT users.display_name FROM loans
+               JOIN users ON users.id = loans.borrower_id
+               WHERE loans.book_id = ? AND loans.status = 'requested'
+               ORDER BY loans.requested_at LIMIT 1""",
+            (loan["book_id"],),
+        ).fetchone()
+        if next_hold:
+            flash(
+                f"Welcome back, book! {next_hold['display_name']} has a hold"
+                " on it — approve their request below to pass it along."
+            )
+        else:
+            flash("Welcome back, book! It's available again.")
     return redirect(url_for("requests_page"))
 
 

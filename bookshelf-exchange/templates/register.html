@@ -9,6 +9,10 @@
     <label>Display name <input name="display_name" maxlength="50"
            placeholder="What your friends call you"></label>
     <label>Password <input name="password" type="password" required minlength="6"></label>
+    {% if need_code %}
+    <label>Group invite code <input name="join_code" required
+           placeholder="Ask whoever runs the site"></label>
+    {% endif %}
     <button type="submit" class="cta">Create account</button>
   </form>
   <p class="muted">Already a member? <a href="{{ url_for('login') }}">Log in</a></p>

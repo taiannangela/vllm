@@ -14,9 +14,13 @@
       <span>requested by
         <a href="{{ url_for('user_page', username=l['username']) }}">{{ l['display_name'] }}</a>
       </span>
+      {% if l['book_status'] == 'available' %}
       <form class="inline" action="{{ url_for('approve_loan', loan_id=l['id']) }}" method="post">
         <button type="submit" class="cta">Approve checkout</button>
       </form>
+      {% else %}
+      <span class="status requested">hold — waiting for the book to come back</span>
+      {% endif %}
       <form class="inline" action="{{ url_for('decline_loan', loan_id=l['id']) }}" method="post">
         <button type="submit">Decline</button>
       </form>
