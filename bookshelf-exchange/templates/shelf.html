@@ -35,7 +35,7 @@
       {% for b in books %}
       <li>
         <span class="title">{{ b['title'] }}</span>
-        {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}
+        {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
         <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
         {% if me and me['id'] != shelf['user_id'] %}
         <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
@@ -64,8 +64,9 @@
     {% endif %}
     <h3>Add books by hand</h3>
     <p class="muted">For spines the AI couldn't read — one book per line,
-      author after a <code>|</code>, like:
-      <code>The Hobbit | J.R.R. Tolkien</code></p>
+      author (and optionally publisher) after <code>|</code>, like:
+      <code>The Hobbit | J.R.R. Tolkien</code> or
+      <code>Titus | Florence Kingsley | Lamplighter</code></p>
     <form action="{{ url_for('add_books', shelf_id=shelf['id']) }}" method="post">
       <textarea name="books" rows="4" required
                 placeholder="The Hobbit | J.R.R. Tolkien&#10;Pride and Prejudice | Jane Austen"></textarea>

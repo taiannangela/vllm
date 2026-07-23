@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS books (
     shelf_id   INTEGER REFERENCES shelves(id),
     title      TEXT NOT NULL,
     author     TEXT NOT NULL DEFAULT '',
+    publisher  TEXT NOT NULL DEFAULT '',
     status     TEXT NOT NULL DEFAULT 'available',  -- available | borrowed
     created_at TEXT NOT NULL
 );
@@ -131,6 +132,12 @@ def init_db():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     with sqlite3.connect(DATABASE) as db:
         db.executescript(SCHEMA)
+        cols = [row[1] for row in db.execute("PRAGMA table_info(books)")]
+        if "publisher" not in cols:  # upgrade databases from older versions
+            db.execute(
+                "ALTER TABLE books ADD COLUMN publisher TEXT NOT NULL"
+                " DEFAULT ''"
+            )
 
 
 def now():
@@ -278,8 +285,9 @@ BOOKS_SCHEMA = {
                 "properties": {
                     "title": {"type": "string"},
                     "author": {"type": "string"},
+                    "publisher": {"type": "string"},
                 },
-                "required": ["title", "author"],
+                "required": ["title", "author", "publisher"],
                 "additionalProperties": False,
             },
         }
@@ -293,6 +301,11 @@ SCAN_PROMPT = (
     " cover is legible. For each, give the title and author exactly as"
     " printed (use your knowledge of the book to fill in an author that is"
     " printed too small to read; leave author empty only if truly unknown)."
+    " Also give the publisher when you can identify it — from a printed"
+    " imprint on the spine, or from a distinctive edition design you"
+    " recognize (for example Lamplighter Publishing's lamp emblem and"
+    " ornate gilt spines, Penguin Classics' black spines, Easton Press"
+    " leather bindings). Leave publisher empty rather than guessing."
     " List each physical book once, in shelf order. Skip objects that are"
     " not books and spines too blurry or obscured to identify."
 )
@@ -374,9 +387,16 @@ def add_scanned_books(db, shelf_id, owner_id, found):
             continue
         existing.add(title.lower())
         db.execute(
-            "INSERT INTO books (owner_id, shelf_id, title, author, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (owner_id, shelf_id, title, book["author"].strip(), now()),
+            "INSERT INTO books (owner_id, shelf_id, title, author, publisher,"
+            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                owner_id,
+                shelf_id,
+                title,
+                book["author"].strip(),
+                book.get("publisher", "").strip(),
+                now(),
+            ),
         )
         added += 1
     db.commit()
@@ -578,11 +598,14 @@ def add_books(shelf_id):
         line = line.strip()
         if not line:
             continue
-        title, _, author = line.partition("|")
+        parts = [p.strip() for p in line.split("|")]
+        title = parts[0]
+        author = parts[1] if len(parts) > 1 else ""
+        publisher = parts[2] if len(parts) > 2 else ""
         db.execute(
-            "INSERT INTO books (owner_id, shelf_id, title, author, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (session["user_id"], shelf_id, title.strip(), author.strip(), now()),
+            "INSERT INTO books (owner_id, shelf_id, title, author, publisher,"
+            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (session["user_id"], shelf_id, title, author, publisher, now()),
         )
         added += 1
     db.commit()
@@ -602,12 +625,14 @@ def edit_book(book_id):
     if request.method == "POST":
         title = request.form["title"].strip()
         author = request.form["author"].strip()
+        publisher = request.form.get("publisher", "").strip()
         if not title:
             flash("The title can't be empty.")
         else:
             db.execute(
-                "UPDATE books SET title = ?, author = ? WHERE id = ?",
-                (title, author, book_id),
+                "UPDATE books SET title = ?, author = ?, publisher = ?"
+                " WHERE id = ?",
+                (title, author, publisher, book_id),
             )
             db.commit()
             flash("Book updated.")
@@ -686,8 +711,9 @@ def search():
                 """SELECT books.*, users.username, users.display_name
                    FROM books JOIN users ON users.id = books.owner_id
                    WHERE books.title LIKE ? OR books.author LIKE ?
+                      OR books.publisher LIKE ?
                    ORDER BY books.status, books.title""",
-                (like, like),
+                (like, like, like),
             )
             .fetchall()
         )

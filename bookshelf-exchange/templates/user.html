@@ -33,7 +33,7 @@
     {% for b in books %}
     <li>
       <span class="title">{{ b['title'] }}</span>
-      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}
+      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
       <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
       {% if me and me['id'] != user['id'] %}
       <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">

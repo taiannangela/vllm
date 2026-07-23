@@ -9,7 +9,7 @@
     {% for b in books %}
     <li>
       <span class="title">{{ b['title'] }}</span>
-      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}
+      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
       <a class="owner" href="{{ url_for('user_page', username=b['username']) }}">{{ b['display_name'] }}</a>
       <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
       {% if me and me['id'] != b['owner_id'] %}

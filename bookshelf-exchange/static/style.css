@@ -184,6 +184,7 @@ button.danger { color: var(--accent); border-color: transparent; background: non
 form.inline { display: inline; }
 form.stack { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .edit-link { text-decoration: none; padding: 0 0.3rem; }
+.publisher { color: var(--muted); font-size: 0.9em; }
 
 .form-page { max-width: 420px; margin: 2rem auto; }
 .form-page form { display: flex; flex-direction: column; gap: 0.9rem; }
