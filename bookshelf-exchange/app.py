@@ -587,6 +587,35 @@ def add_books(shelf_id):
     return redirect(url_for("shelf", shelf_id=shelf_id))
 
 
+@app.route("/books/<int:book_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_book(book_id):
+    db = get_db()
+    book = db.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        abort(404)
+    if book["owner_id"] != session["user_id"]:
+        abort(403)
+    if request.method == "POST":
+        title = request.form["title"].strip()
+        author = request.form["author"].strip()
+        if not title:
+            flash("The title can't be empty.")
+        else:
+            db.execute(
+                "UPDATE books SET title = ?, author = ? WHERE id = ?",
+                (title, author, book_id),
+            )
+            db.commit()
+            flash("Book updated.")
+            if book["shelf_id"]:
+                return redirect(url_for("shelf", shelf_id=book["shelf_id"]))
+            return redirect(
+                url_for("user_page", username=current_user()["username"])
+            )
+    return render_template("edit_book.html", book=book)
+
+
 @app.route("/books/<int:book_id>/delete", methods=["POST"])
 @login_required
 def delete_book(book_id):

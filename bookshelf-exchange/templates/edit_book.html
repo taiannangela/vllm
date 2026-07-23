@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Edit book · Bookshelf Exchange{% endblock %}
+{% block content %}
+<div class="form-page">
+  <h1>Edit book</h1>
+  <form method="post">
+    <label>Title <input name="title" required maxlength="200"
+           value="{{ book['title'] }}"></label>
+    <label>Author <input name="author" maxlength="200"
+           value="{{ book['author'] }}"></label>
+    <button type="submit" class="cta">Save</button>
+  </form>
+  {% if book['shelf_id'] %}
+  <p class="muted"><a href="{{ url_for('shelf', shelf_id=book['shelf_id']) }}">← Back to shelf</a></p>
+  {% endif %}
+</div>
+{% endblock %}
