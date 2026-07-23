@@ -992,4 +992,6 @@ def my_loans():
 init_db()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # 0.0.0.0 = reachable from other devices on the same network (phones);
+    # the startup log prints the http://192.168.x.x:5000 address to use.
+    app.run(debug=True, host="0.0.0.0", port=5000)
