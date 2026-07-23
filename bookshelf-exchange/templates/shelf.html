@@ -13,6 +13,19 @@
     {% else %}
       <div class="no-photo big">📚 No photo</div>
     {% endif %}
+    {% if me and me['id'] == shelf['user_id'] %}
+    <form class="stack" action="{{ url_for('upload_shelf_photo', shelf_id=shelf['id']) }}"
+          method="post" enctype="multipart/form-data">
+      <input name="photo" type="file" accept="image/*" required>
+      <button type="submit" class="cta">
+        {{ '📷 Replace photo & scan' if shelf['photo'] else '📷 Add photo & scan' }}
+      </button>
+    </form>
+    <form class="stack" action="{{ url_for('delete_shelf', shelf_id=shelf['id']) }}" method="post"
+          onsubmit="return confirm('Delete this shelf and its book list?');">
+      <button type="submit" class="danger">Delete this shelf</button>
+    </form>
+    {% endif %}
   </div>
 
   <div class="shelf-books">

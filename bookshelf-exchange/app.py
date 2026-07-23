@@ -442,15 +442,93 @@ def new_shelf():
     return render_template("new_shelf.html")
 
 
-@app.route("/shelves/<int:shelf_id>/scan", methods=["POST"])
-@login_required
-def rescan_shelf(shelf_id):
-    db = get_db()
-    row = db.execute("SELECT * FROM shelves WHERE id = ?", (shelf_id,)).fetchone()
+def _owned_shelf(shelf_id):
+    row = (
+        get_db()
+        .execute("SELECT * FROM shelves WHERE id = ?", (shelf_id,))
+        .fetchone()
+    )
     if row is None:
         abort(404)
     if row["user_id"] != session["user_id"]:
         abort(403)
+    return row
+
+
+def _scan_and_report(db, shelf_id, photo_name):
+    try:
+        found = scan_shelf_photo(photo_name)
+        added = add_scanned_books(db, shelf_id, session["user_id"], found)
+        flash(
+            f"The AI spotted {added} new book{'' if added == 1 else 's'} in"
+            " the photo — check the list and fix anything it misread."
+        )
+    except ScanError as exc:
+        flash(str(exc))
+
+
+@app.route("/shelves/<int:shelf_id>/photo", methods=["POST"])
+@login_required
+def upload_shelf_photo(shelf_id):
+    row = _owned_shelf(shelf_id)
+    photo = request.files.get("photo")
+    if not photo or not photo.filename:
+        flash("Choose a photo first.")
+    else:
+        photo_name = save_photo(photo)
+        if photo_name is None:
+            flash("That file doesn't look like an image — try a photo.")
+        else:
+            db = get_db()
+            db.execute(
+                "UPDATE shelves SET photo = ? WHERE id = ?",
+                (photo_name, shelf_id),
+            )
+            db.commit()
+            if row["photo"]:
+                try:
+                    os.remove(os.path.join(UPLOAD_DIR, row["photo"]))
+                except OSError:
+                    pass
+            _scan_and_report(db, shelf_id, photo_name)
+    return redirect(url_for("shelf", shelf_id=shelf_id))
+
+
+@app.route("/shelves/<int:shelf_id>/delete", methods=["POST"])
+@login_required
+def delete_shelf(shelf_id):
+    row = _owned_shelf(shelf_id)
+    db = get_db()
+    checked_out = db.execute(
+        """SELECT COUNT(*) FROM books
+           WHERE shelf_id = ? AND status = 'borrowed'""",
+        (shelf_id,),
+    ).fetchone()[0]
+    if checked_out:
+        flash("You can't delete a shelf while one of its books is checked out.")
+        return redirect(url_for("shelf", shelf_id=shelf_id))
+    db.execute(
+        "DELETE FROM loans WHERE book_id IN"
+        " (SELECT id FROM books WHERE shelf_id = ?)",
+        (shelf_id,),
+    )
+    db.execute("DELETE FROM books WHERE shelf_id = ?", (shelf_id,))
+    db.execute("DELETE FROM shelves WHERE id = ?", (shelf_id,))
+    db.commit()
+    if row["photo"]:
+        try:
+            os.remove(os.path.join(UPLOAD_DIR, row["photo"]))
+        except OSError:
+            pass
+    flash("Shelf deleted.")
+    return redirect(url_for("user_page", username=current_user()["username"]))
+
+
+@app.route("/shelves/<int:shelf_id>/scan", methods=["POST"])
+@login_required
+def rescan_shelf(shelf_id):
+    db = get_db()
+    row = _owned_shelf(shelf_id)
     if not row["photo"]:
         flash("This shelf has no photo to scan.")
     else:
