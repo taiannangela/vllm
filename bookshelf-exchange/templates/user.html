@@ -9,8 +9,8 @@
   <div class="grid">
     {% for s in shelves %}
     <a class="card shelf-card" href="{{ url_for('shelf', shelf_id=s['id']) }}">
-      {% if s['photo'] %}
-        <img src="{{ url_for('uploaded_file', filename=s['photo']) }}" alt="{{ s['name'] }}">
+      {% if s['cover'] %}
+        <img src="{{ url_for('uploaded_file', filename=s['cover']) }}" alt="{{ s['name'] }}">
       {% else %}
         <div class="no-photo">📚</div>
       {% endif %}

@@ -85,7 +85,14 @@ CREATE TABLE IF NOT EXISTS shelves (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id),
     name       TEXT NOT NULL,
-    photo      TEXT,
+    photo      TEXT,  -- legacy single photo; migrated into shelf_photos
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shelf_photos (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    shelf_id   INTEGER NOT NULL REFERENCES shelves(id),
+    filename   TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
@@ -138,6 +145,16 @@ def init_db():
                 "ALTER TABLE books ADD COLUMN publisher TEXT NOT NULL"
                 " DEFAULT ''"
             )
+        # Migrate legacy one-photo-per-shelf data into shelf_photos.
+        for sid, photo in db.execute(
+            "SELECT id, photo FROM shelves WHERE photo IS NOT NULL"
+        ).fetchall():
+            db.execute(
+                "INSERT INTO shelf_photos (shelf_id, filename, created_at)"
+                " VALUES (?, ?, ?)",
+                (sid, photo, now()),
+            )
+        db.execute("UPDATE shelves SET photo = NULL WHERE photo IS NOT NULL")
 
 
 def now():
@@ -409,7 +426,10 @@ def index():
     shelves = db.execute(
         """SELECT shelves.*, users.username, users.display_name,
                   (SELECT COUNT(*) FROM books WHERE books.shelf_id = shelves.id)
-                  AS book_count
+                  AS book_count,
+                  (SELECT filename FROM shelf_photos
+                   WHERE shelf_photos.shelf_id = shelves.id
+                   ORDER BY shelf_photos.id LIMIT 1) AS cover
            FROM shelves JOIN users ON users.id = shelves.user_id
            ORDER BY shelves.created_at DESC LIMIT 12"""
     ).fetchall()
@@ -431,38 +451,76 @@ def index():
 def new_shelf():
     if request.method == "POST":
         name = request.form["name"].strip() or "My shelf"
-        photo_name = None
-        photo = request.files.get("photo")
-        if photo and photo.filename:
-            photo_name = save_photo(photo)
-            if photo_name is None:
-                flash("That file doesn't look like an image — try a photo.")
-                return render_template("new_shelf.html")
+        files = [f for f in request.files.getlist("photo") if f and f.filename]
+        saved = _store_photos(files)
+        if files and not saved:
+            return render_template("new_shelf.html")
         db = get_db()
         cur = db.execute(
-            "INSERT INTO shelves (user_id, name, photo, created_at)"
-            " VALUES (?, ?, ?, ?)",
-            (session["user_id"], name, photo_name, now()),
+            "INSERT INTO shelves (user_id, name, created_at) VALUES (?, ?, ?)",
+            (session["user_id"], name, now()),
         )
         db.commit()
         shelf_id = cur.lastrowid
-        if photo_name:
-            try:
-                found = scan_shelf_photo(photo_name)
-                added = add_scanned_books(
-                    db, shelf_id, session["user_id"], found
-                )
+        _attach_photos(db, shelf_id, saved)
+        if saved:
+            added, ok = _scan_photos(db, shelf_id, saved)
+            if ok:
                 flash(
                     f"Shelf saved! The AI spotted {added} book"
-                    f"{'' if added == 1 else 's'} in your photo — check the"
+                    f"{'' if added == 1 else 's'} in your"
+                    f" photo{'' if len(saved) == 1 else 's'} — check the"
                     " list and fix anything it misread."
                 )
-            except ScanError as exc:
-                flash(f"Shelf saved! {exc}")
+            else:
+                flash("Shelf saved!")
         else:
             flash("Shelf saved! Add books below.")
         return redirect(url_for("shelf", shelf_id=shelf_id))
     return render_template("new_shelf.html")
+
+
+def _store_photos(files):
+    """Save uploaded images to disk; returns filenames, flashing skips."""
+    saved = []
+    for f in files:
+        photo_name = save_photo(f)
+        if photo_name is None:
+            flash(f"{f.filename} doesn't look like an image — skipped it.")
+        else:
+            saved.append(photo_name)
+    return saved
+
+
+def _attach_photos(db, shelf_id, filenames):
+    for photo_name in filenames:
+        db.execute(
+            "INSERT INTO shelf_photos (shelf_id, filename, created_at)"
+            " VALUES (?, ?, ?)",
+            (shelf_id, photo_name, now()),
+        )
+    if filenames:
+        db.commit()
+
+
+def _scan_photos(db, shelf_id, filenames):
+    """Scan photos into the shelf's book list; returns (added, all_ok)."""
+    added = 0
+    for photo_name in filenames:
+        try:
+            found = scan_shelf_photo(photo_name)
+        except ScanError as exc:
+            flash(str(exc))
+            return added, False
+        added += add_scanned_books(db, shelf_id, session["user_id"], found)
+    return added, True
+
+
+def _shelf_photos(db, shelf_id):
+    return db.execute(
+        "SELECT * FROM shelf_photos WHERE shelf_id = ? ORDER BY id",
+        (shelf_id,),
+    ).fetchall()
 
 
 def _owned_shelf(shelf_id):
@@ -478,43 +536,49 @@ def _owned_shelf(shelf_id):
     return row
 
 
-def _scan_and_report(db, shelf_id, photo_name):
-    try:
-        found = scan_shelf_photo(photo_name)
-        added = add_scanned_books(db, shelf_id, session["user_id"], found)
-        flash(
-            f"The AI spotted {added} new book{'' if added == 1 else 's'} in"
-            " the photo — check the list and fix anything it misread."
-        )
-    except ScanError as exc:
-        flash(str(exc))
-
-
 @app.route("/shelves/<int:shelf_id>/photo", methods=["POST"])
 @login_required
 def upload_shelf_photo(shelf_id):
-    row = _owned_shelf(shelf_id)
-    photo = request.files.get("photo")
-    if not photo or not photo.filename:
-        flash("Choose a photo first.")
+    _owned_shelf(shelf_id)
+    db = get_db()
+    files = [f for f in request.files.getlist("photo") if f and f.filename]
+    saved = _store_photos(files)
+    _attach_photos(db, shelf_id, saved)
+    if not saved:
+        if not files:
+            flash("Choose a photo first.")
     else:
-        photo_name = save_photo(photo)
-        if photo_name is None:
-            flash("That file doesn't look like an image — try a photo.")
-        else:
-            db = get_db()
-            db.execute(
-                "UPDATE shelves SET photo = ? WHERE id = ?",
-                (photo_name, shelf_id),
+        added, ok = _scan_photos(db, shelf_id, saved)
+        if ok:
+            flash(
+                f"The AI spotted {added} new book{'' if added == 1 else 's'}"
+                " in the photo — check the list and fix anything it misread."
             )
-            db.commit()
-            if row["photo"]:
-                try:
-                    os.remove(os.path.join(UPLOAD_DIR, row["photo"]))
-                except OSError:
-                    pass
-            _scan_and_report(db, shelf_id, photo_name)
     return redirect(url_for("shelf", shelf_id=shelf_id))
+
+
+@app.route("/photos/<int:photo_id>/delete", methods=["POST"])
+@login_required
+def delete_photo(photo_id):
+    db = get_db()
+    row = db.execute(
+        """SELECT shelf_photos.*, shelves.user_id FROM shelf_photos
+           JOIN shelves ON shelves.id = shelf_photos.shelf_id
+           WHERE shelf_photos.id = ?""",
+        (photo_id,),
+    ).fetchone()
+    if row is None:
+        abort(404)
+    if row["user_id"] != session["user_id"]:
+        abort(403)
+    db.execute("DELETE FROM shelf_photos WHERE id = ?", (photo_id,))
+    db.commit()
+    try:
+        os.remove(os.path.join(UPLOAD_DIR, row["filename"]))
+    except OSError:
+        pass
+    flash("Photo removed. The books stay listed.")
+    return redirect(url_for("shelf", shelf_id=row["shelf_id"]))
 
 
 @app.route("/shelves/<int:shelf_id>/delete", methods=["POST"])
@@ -530,17 +594,19 @@ def delete_shelf(shelf_id):
     if checked_out:
         flash("You can't delete a shelf while one of its books is checked out.")
         return redirect(url_for("shelf", shelf_id=shelf_id))
+    filenames = [p["filename"] for p in _shelf_photos(db, shelf_id)]
     db.execute(
         "DELETE FROM loans WHERE book_id IN"
         " (SELECT id FROM books WHERE shelf_id = ?)",
         (shelf_id,),
     )
     db.execute("DELETE FROM books WHERE shelf_id = ?", (shelf_id,))
+    db.execute("DELETE FROM shelf_photos WHERE shelf_id = ?", (shelf_id,))
     db.execute("DELETE FROM shelves WHERE id = ?", (shelf_id,))
     db.commit()
-    if row["photo"]:
+    for filename in filenames:
         try:
-            os.remove(os.path.join(UPLOAD_DIR, row["photo"]))
+            os.remove(os.path.join(UPLOAD_DIR, filename))
         except OSError:
             pass
     flash("Shelf deleted.")
@@ -551,19 +617,17 @@ def delete_shelf(shelf_id):
 @login_required
 def rescan_shelf(shelf_id):
     db = get_db()
-    row = _owned_shelf(shelf_id)
-    if not row["photo"]:
+    _owned_shelf(shelf_id)
+    filenames = [p["filename"] for p in _shelf_photos(db, shelf_id)]
+    if not filenames:
         flash("This shelf has no photo to scan.")
     else:
-        try:
-            found = scan_shelf_photo(row["photo"])
-            added = add_scanned_books(db, shelf_id, session["user_id"], found)
+        added, ok = _scan_photos(db, shelf_id, filenames)
+        if ok:
             if added:
                 flash(f"Scan found {added} new book{'' if added == 1 else 's'}.")
             else:
                 flash("Scan finished — no new books beyond what's listed.")
-        except ScanError as exc:
-            flash(str(exc))
     return redirect(url_for("shelf", shelf_id=shelf_id))
 
 
@@ -581,7 +645,9 @@ def shelf(shelf_id):
     books = db.execute(
         "SELECT * FROM books WHERE shelf_id = ? ORDER BY title", (shelf_id,)
     ).fetchall()
-    return render_template("shelf.html", shelf=row, books=books)
+    return render_template(
+        "shelf.html", shelf=row, books=books, photos=_shelf_photos(db, shelf_id)
+    )
 
 
 @app.route("/shelves/<int:shelf_id>/books", methods=["POST"])
@@ -682,7 +748,10 @@ def user_page(username):
     shelves = db.execute(
         """SELECT shelves.*,
                   (SELECT COUNT(*) FROM books WHERE books.shelf_id = shelves.id)
-                  AS book_count
+                  AS book_count,
+                  (SELECT filename FROM shelf_photos
+                   WHERE shelf_photos.shelf_id = shelves.id
+                   ORDER BY shelf_photos.id LIMIT 1) AS cover
            FROM shelves WHERE user_id = ? ORDER BY created_at DESC""",
         (user["id"],),
     ).fetchall()

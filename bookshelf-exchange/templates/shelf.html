@@ -8,18 +8,24 @@
 
 <div class="shelf-layout">
   <div class="shelf-photo">
-    {% if shelf['photo'] %}
-      <img src="{{ url_for('uploaded_file', filename=shelf['photo']) }}" alt="{{ shelf['name'] }}">
+    {% for p in photos %}
+    <div class="photo-item">
+      <img src="{{ url_for('uploaded_file', filename=p['filename']) }}" alt="{{ shelf['name'] }}">
+      {% if me and me['id'] == shelf['user_id'] %}
+      <form class="inline" action="{{ url_for('delete_photo', photo_id=p['id']) }}" method="post"
+            onsubmit="return confirm('Remove this photo? The books stay listed.');">
+        <button type="submit" class="danger">✕ remove photo</button>
+      </form>
+      {% endif %}
+    </div>
     {% else %}
-      <div class="no-photo big">📚 No photo</div>
-    {% endif %}
+    <div class="no-photo big">📚 No photo yet</div>
+    {% endfor %}
     {% if me and me['id'] == shelf['user_id'] %}
     <form class="stack" action="{{ url_for('upload_shelf_photo', shelf_id=shelf['id']) }}"
           method="post" enctype="multipart/form-data">
-      <input name="photo" type="file" accept="image/*" required>
-      <button type="submit" class="cta">
-        {{ '📷 Replace photo & scan' if shelf['photo'] else '📷 Add photo & scan' }}
-      </button>
+      <input name="photo" type="file" accept="image/*" multiple required>
+      <button type="submit" class="cta">📷 Add photos & scan</button>
     </form>
     <form class="stack" action="{{ url_for('delete_shelf', shelf_id=shelf['id']) }}" method="post"
           onsubmit="return confirm('Delete this shelf and its book list?');">
@@ -58,8 +64,8 @@
     {% if me and me['id'] == shelf['user_id'] %}
     {% if shelf['photo'] %}
     <form action="{{ url_for('rescan_shelf', shelf_id=shelf['id']) }}" method="post">
-      <button type="submit" class="cta">✨ Scan photo for books</button>
-      <span class="muted">The AI reads the spines and adds what it finds.</span>
+      <button type="submit" class="cta">✨ Scan photos for books</button>
+      <span class="muted">Re-reads every photo; already-listed books are skipped.</span>
     </form>
     {% endif %}
     <h3>Add books by hand</h3>

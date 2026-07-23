@@ -3,16 +3,17 @@
 {% block content %}
 <div class="form-page">
   <h1>Add a bookshelf</h1>
-  <p class="muted">Take a picture of your bookshelf and upload it here.
+  <p class="muted">Take pictures of your bookshelf and upload them here —
+     you can pick several at once, e.g. one close-up per shelf row.
      The AI reads the book spines and fills in your book list automatically —
      you just review it on the next page. Tip: shoot straight-on in good
      light so the spines are readable.</p>
   <form method="post" enctype="multipart/form-data">
     <label>Shelf name
-      <input name="name" maxlength="60" placeholder="e.g. Bedroom shelf, top row">
+      <input name="name" maxlength="60" placeholder="e.g. Bedroom bookcase">
     </label>
-    <label>Photo of the shelf
-      <input name="photo" type="file" accept="image/*">
+    <label>Photos of the shelf
+      <input name="photo" type="file" accept="image/*" multiple>
     </label>
     <button type="submit" class="cta">Save shelf</button>
   </form>
