@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not me %}
+<section class="hero">
+  <h1>Share your shelves with your friends</h1>
+  <p>Snap a photo of your bookshelf, list what's on it, and borrow
+     books from each other — like a tiny library run by your friend group.</p>
+  <a class="cta big" href="{{ url_for('register') }}">Create an account</a>
+</section>
+{% endif %}
+
+<section>
+  <h2>Latest shelves</h2>
+  {% if shelves %}
+  <div class="grid">
+    {% for s in shelves %}
+    <a class="card shelf-card" href="{{ url_for('shelf', shelf_id=s['id']) }}">
+      {% if s['cover'] %}
+        <img src="{{ url_for('uploaded_file', filename=s['cover']) }}" alt="{{ s['name'] }}">
+      {% else %}
+        <div class="no-photo">📚</div>
+      {% endif %}
+      <div class="card-body">
+        <strong>{{ s['name'] }}</strong>
+        <span>{{ s['display_name'] }} · {{ s['book_count'] }} book{{ '' if s['book_count'] == 1 else 's' }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No shelves yet — be the first to add one!</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Recently added books</h2>
+  {% if books %}
+  <ul class="book-list">
+    {% for b in books %}
+    <li>
+      <span class="title">{{ b['title'] }}</span>
+      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
+      <a class="owner" href="{{ url_for('user_page', username=b['username']) }}">{{ b['display_name'] }}</a>
+      <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No books cataloged yet.</p>
+  {% endif %}
+</section>
+
+{% if members %}
+<section>
+  <h2>Members</h2>
+  <p>
+    {% for m in members %}
+      <a class="chip" href="{{ url_for('user_page', username=m['username']) }}">{{ m['display_name'] }}</a>
+    {% endfor %}
+  </p>
+</section>
+{% endif %}
+{% endblock %}

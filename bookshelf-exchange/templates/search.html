@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Search · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>Search</h1>
+{% if q %}
+  <p class="muted">{{ books|length }} result{{ '' if books|length == 1 else 's' }} for “{{ q }}”</p>
+  {% if books %}
+  <ul class="book-list">
+    {% for b in books %}
+    <li>
+      <span class="title">{{ b['title'] }}</span>
+      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
+      <a class="owner" href="{{ url_for('user_page', username=b['username']) }}">{{ b['display_name'] }}</a>
+      <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
+      {% if me and me['id'] != b['owner_id'] %}
+      <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
+        <button type="submit">{{ 'Borrow' if b['status'] == 'available' else 'Place hold' }}</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nobody has that book yet — maybe suggest it for someone's next haul!</p>
+  {% endif %}
+{% else %}
+  <p class="muted">Type a book title or author in the search box above.</p>
+{% endif %}
+{% endblock %}

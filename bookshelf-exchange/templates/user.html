@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ user['display_name'] }} · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>{{ user['display_name'] }}'s library</h1>
+
+<section>
+  <h2>Shelves</h2>
+  {% if shelves %}
+  <div class="grid">
+    {% for s in shelves %}
+    <a class="card shelf-card" href="{{ url_for('shelf', shelf_id=s['id']) }}">
+      {% if s['cover'] %}
+        <img src="{{ url_for('uploaded_file', filename=s['cover']) }}" alt="{{ s['name'] }}">
+      {% else %}
+        <div class="no-photo">📚</div>
+      {% endif %}
+      <div class="card-body">
+        <strong>{{ s['name'] }}</strong>
+        <span>{{ s['book_count'] }} book{{ '' if s['book_count'] == 1 else 's' }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No shelves yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>All books ({{ books|length }})</h2>
+  {% if books %}
+  <ul class="book-list">
+    {% for b in books %}
+    <li>
+      <span class="title">{{ b['title'] }}</span>
+      {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
+      <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
+      {% if me and me['id'] != user['id'] %}
+      <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
+        <button type="submit">{{ 'Borrow' if b['status'] == 'available' else 'Place hold' }}</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No books cataloged yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

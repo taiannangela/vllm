@@ -1,0 +1,6 @@
+bookshelf.db
+.env
+uploads/*
+!uploads/.gitkeep
+.venv/
+__pycache__/

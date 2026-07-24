@@ -1,0 +1,19 @@
+# One-tap deploy of the Bookshelf Exchange (bookshelf-exchange/) on Render.
+# In the Render dashboard: New + -> Blueprint -> pick this repo & branch.
+services:
+  - type: web
+    name: bookshelf-exchange
+    runtime: python
+    plan: starter
+    rootDir: bookshelf-exchange
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # Render prompts you to paste it at deploy time
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: bookshelf-data
+      mountPath: /var/data
+      sizeGB: 1

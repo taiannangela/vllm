@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ shelf['name'] }} · Bookshelf Exchange{% endblock %}
+{% block content %}
+<h1>{{ shelf['name'] }}</h1>
+<p class="muted">A shelf from
+  <a href="{{ url_for('user_page', username=shelf['username']) }}">{{ shelf['display_name'] }}</a>
+</p>
+
+<div class="shelf-layout">
+  <div class="shelf-photo">
+    {% for p in photos %}
+    <div class="photo-item">
+      <img src="{{ url_for('uploaded_file', filename=p['filename']) }}" alt="{{ shelf['name'] }}">
+      {% if me and me['id'] == shelf['user_id'] %}
+      <form class="inline" action="{{ url_for('delete_photo', photo_id=p['id']) }}" method="post"
+            onsubmit="return confirm('Remove this photo? The books stay listed.');">
+        <button type="submit" class="danger">✕ remove photo</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="no-photo big">📚 No photo yet</div>
+    {% endfor %}
+    {% if me and me['id'] == shelf['user_id'] %}
+    <form class="stack" action="{{ url_for('upload_shelf_photo', shelf_id=shelf['id']) }}"
+          method="post" enctype="multipart/form-data">
+      <input name="photo" type="file" accept="image/*" multiple required>
+      <button type="submit" class="cta">📷 Add photos & scan</button>
+    </form>
+    <form class="stack" action="{{ url_for('delete_shelf', shelf_id=shelf['id']) }}" method="post"
+          onsubmit="return confirm('Delete this shelf and its book list?');">
+      <button type="submit" class="danger">Delete this shelf</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="shelf-books">
+    <h2>Books on this shelf</h2>
+    {% if books %}
+    <ul class="book-list">
+      {% for b in books %}
+      <li>
+        <span class="title">{{ b['title'] }}</span>
+        {% if b['author'] %}<span class="author">by {{ b['author'] }}</span>{% endif %}{% if b['publisher'] %}<span class="publisher">· {{ b['publisher'] }}</span>{% endif %}
+        <span class="status {{ b['status'] }}">{{ 'available' if b['status'] == 'available' else 'checked out' }}</span>
+        {% if me and me['id'] != shelf['user_id'] %}
+        <form class="inline" action="{{ url_for('request_book', book_id=b['id']) }}" method="post">
+          <button type="submit">{{ 'Borrow' if b['status'] == 'available' else 'Place hold' }}</button>
+        </form>
+        {% endif %}
+        {% if me and me['id'] == shelf['user_id'] %}
+        <a class="edit-link" href="{{ url_for('edit_book', book_id=b['id']) }}" title="Fix title or author">✎</a>
+        <form class="inline" action="{{ url_for('delete_book', book_id=b['id']) }}" method="post">
+          <button type="submit" class="danger" title="Remove book">✕</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No books listed yet.</p>
+    {% endif %}
+
+    {% if me and me['id'] == shelf['user_id'] %}
+    {% if shelf['photo'] %}
+    <form action="{{ url_for('rescan_shelf', shelf_id=shelf['id']) }}" method="post">
+      <button type="submit" class="cta">✨ Scan photos for books</button>
+      <span class="muted">Re-reads every photo; already-listed books are skipped.</span>
+    </form>
+    {% endif %}
+    <h3>Add books by hand</h3>
+    <p class="muted">For spines the AI couldn't read — one book per line,
+      author (and optionally publisher) after <code>|</code>, like:
+      <code>The Hobbit | J.R.R. Tolkien</code> or
+      <code>Titus | Florence Kingsley | Lamplighter</code></p>
+    <form action="{{ url_for('add_books', shelf_id=shelf['id']) }}" method="post">
+      <textarea name="books" rows="4" required
+                placeholder="The Hobbit | J.R.R. Tolkien&#10;Pride and Prejudice | Jane Austen"></textarea>
+      <button type="submit">Add books</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

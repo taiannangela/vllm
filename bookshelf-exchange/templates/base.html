@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Bookshelf Exchange{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <nav>
+    <a class="brand" href="{{ url_for('index') }}">📚 Bookshelf Exchange</a>
+    <form class="search" action="{{ url_for('search') }}" method="get">
+      <input type="search" name="q" placeholder="Search for a book or author…"
+             value="{{ request.args.get('q', '') }}">
+      <button type="submit">Search</button>
+    </form>
+    <div class="links">
+      {% if me %}
+        <a href="{{ url_for('new_shelf') }}">+ Add shelf</a>
+        <a href="{{ url_for('requests_page') }}">Requests
+          {% if pending_requests %}<span class="badge">{{ pending_requests }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('my_loans') }}">My borrowing</a>
+        <a href="{{ url_for('user_page', username=me['username']) }}">{{ me['display_name'] }}</a>
+        <a href="{{ url_for('logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">Log in</a>
+        <a class="cta" href="{{ url_for('register') }}">Join</a>
+      {% endif %}
+    </div>
+  </nav>
+</header>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div class="flashes">
+      {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<footer>Made with ❤️ for our book club.</footer>
+</body>
+</html>
